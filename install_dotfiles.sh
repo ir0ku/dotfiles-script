@@ -1,64 +1,47 @@
-#!/bin/bash
+#!/bin/sh
 
-# Preinstall
-mkdir -p ~/Downloads
-cd ~/Downloads || exit
-git clone https://github.com/HynDuf7/dotfiles
+# Cambia estos valores según tu configuración
+REPO_URL="https://github.com/HynDuf/nixos-conf.git"
+FAVOURITE_NAME="<YOUR_FAVOURITE_NAME>"
+USERNAME="<YOUR_USERNAME_HERE>"
+HOSTNAME="<YOUR_HOSTNAME>"
 
-# Set up scripts
-mkdir -p ~/bin
-cp -r ~/Downloads/dotfiles/bin ~/bin
-chmod +x ~/bin/*
+# Clonar el repositorio
+git clone "$REPO_URL" "$FAVOURITE_NAME"
 
-# Update PATH
-if ! grep -q 'export PATH="$HOME/bin:$PATH"' ~/.bashrc && ! grep -q 'export PATH="$HOME/bin:$PATH"' ~/.zshrc; then
-    echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashrc
-    echo 'export PATH="$HOME/bin:$PATH"' >> ~/.zshrc
-    echo "Added ~/bin to PATH in .bashrc and .zshrc. Remember to source your shell configuration."
-fi
+# Copiar el archivo de configuración de hardware
+cp --no-preserve=ownership /etc/nixos/hardware-configuration.nix "$FAVOURITE_NAME/hosts/$USERNAME/hardware-configuration.nix"
 
-# Install dependencies
-sudo pacman -S --needed git base-devel
-git clone https://aur.archlinux.org/yay.git
-cd yay || exit
-makepkg -si --noconfirm
-cd .. || exit
-yay -S --needed bspwm brightnessctl dunst eww-git feh i3lock-color nerd-fonts-jetbrains-mono polybar pomo papirus-icon-theme ranger rofi rofi-calc rofi-emoji sxhkd ttf-fira-code ttf-iosevka-nerd ueberzug xdotool
+# Añadir configuración al archivo hardware-configuration.nix
+echo 'boot.kernelPackages = pkgs.linuxPackages_latest;' >> "$FAVOURITE_NAME/hosts/$USERNAME/hardware-configuration.nix"
 
-# Background wallpaper
-mkdir -p ~/Pictures
-cp -r ~/Downloads/dotfiles/wallpapers ~/Pictures
+# Comentar ./nvidia.nix en default.nix
+sed -i 's|^  ./nvidia.nix|# ./nvidia.nix|' "$FAVOURITE_NAME/hosts/$USERNAME/default.nix"
 
-# Polybar setup
-mkdir -p ~/.fonts
-git clone https://github.com/Murzchnvok/polybar-collection ~/Downloads/polybar-collection
-cp -r ~/Downloads/polybar-collection/fonts/* ~/.fonts/
-fc-cache -fv
-cp -r ~/Downloads/dotfiles/.config/polybar ~/.config/polybar
-chmod +x ~/.config/polybar/launch.sh
+# Crear un enlace simbólico
+sudo ln -s "$(pwd)/$FAVOURITE_NAME/flake.nix" /etc/nixos/
 
-# Dunst configuration
-cp -r ~/Downloads/dotfiles/.config/dunst ~/.config/dunst
+# Hacer ejecutables los scripts
+chmod +x "$FAVOURITE_NAME/bin/"*.sh
+chmod +x "$FAVOURITE_NAME/home/visuals/eww/config/scripts/"*.sh
 
-# Rofi and Eww configuration
-cp -r ~/Downloads/dotfiles/.config/rofi ~/.config/rofi
-cp -r ~/Downloads/dotfiles/.config/eww ~/.config/eww
+# Cambiar ID del monitor
+echo "Por favor, ejecuta 'xrandr' y reemplaza 'eDP-1' con tu ID de monitor en los siguientes archivos:"
+echo "1. $FAVOURITE_NAME/home/visuals/bspwm_sxhkd/bspwmrc"
+echo "2. $FAVOURITE_NAME/home/visuals/polybar/config/config.ini"
 
-# Picom installation
-yay -S --needed libconfig libev libxdg-basedir pcre pixman xcb-util-image xcb-util-renderutil hicolor-icon-theme libglvnd libx11 libxcb libxext libdbus asciidoc uthash
-git clone https://github.com/pijulius/picom.git ~/Downloads/picom
-cd ~/Downloads/picom || exit
-meson --buildtype=release . build --prefix=/usr -Dwith_docs=true
-sudo ninja -C build install
-cp -r ~/Downloads/dotfiles/.config/picom ~/.config/picom
+# Cambiar nombre de usuario y hostname en flake.nix y system.nix
+sed -i "s/your/$USERNAME/g" "$FAVOURITE_NAME/flake.nix"
+sed -i "s/hynduf/$USERNAME/g" "$FAVOURITE_NAME/modules/system.nix"
 
-# Add startup commands to bspwmrc
-{
-    echo 'feh --bg-fill ~/Pictures/hollow-knight.png &'
-    echo '$HOME/.config/polybar/launch.sh &'
-    echo 'dunst -conf $HOME/.config/dunst/dunstrc &'
-    echo 'picom &'
-} >> ~/.config/bspwm/bspwmrc
+# Inicializar el repositorio git
+cd "$FAVOURITE_NAME" || exit
+rm -rf .git
+git init
+git add --all
 
-echo "Installation complete! Please source your .bashrc or .zshrc and restart bspwm."
+# Rebuild del sistema
+sudo nixos-rebuild switch --flake .#$HOSTNAME
 
+# Mensaje final
+echo "Configuración completada. Asegúrate de revisar y ajustar cualquier configuración adicional necesaria."
